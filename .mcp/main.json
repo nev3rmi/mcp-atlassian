@@ -4,6 +4,10 @@
             "type": "http",
             "url": "http://192.168.66.3:5678/mcp/56c2b3a4-c373-47d4-9c45-911b02d7c4bb"
         },
+        "lily_tools": {
+            "type": "http",
+            "url": "http://192.168.66.3:5678/mcp/b4d0f2d5-8767-4961-aef5-0007d7f7bfcd"
+        },
         "atlassian_tools": {
             "type": "http",
             "url": "http://192.168.66.5:9000/mcp"
