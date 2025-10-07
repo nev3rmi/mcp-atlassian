@@ -11,6 +11,10 @@
         "atlassian_tools": {
             "type": "http",
             "url": "http://192.168.66.5:9000/mcp"
+        },
+        "voice-hooks": {
+            "command": "npx",
+            "args": ["-y", "voice-hooks@latest"]
         }
     }
 }
