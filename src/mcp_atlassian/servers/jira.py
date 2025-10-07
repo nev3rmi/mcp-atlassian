@@ -650,11 +650,11 @@ async def create_issue(
         ),
     ] = None,
     additional_fields: Annotated[
-        dict[str, Any] | None,
+        dict[str, Any] | str | None,
         Field(
             description=(
-                "(Optional) Dictionary of additional fields to set. Examples:\n"
-                "- Set priority: {'priority': {'name': 'High'}}\n"
+                "(Optional) Dictionary or JSON string of additional fields to set. Examples:\n"
+                "- Set priority: {'priority': {'name': 'High'}} or '{\"priority\": {\"name\": \"High\"}}'\n"
                 "- Add labels: {'labels': ['frontend', 'urgent']}\n"
                 "- Link to parent (for any issue type): {'parent': 'PROJ-123'}\n"
                 "- Set Fix Version/s: {'fixVersions': [{'id': '10020'}]}\n"
@@ -690,10 +690,21 @@ async def create_issue(
             comp.strip() for comp in components.split(",") if comp.strip()
         ]
 
-    # Use additional_fields directly as dict
+    # Parse additional_fields - handle both dict and JSON string
+    logger.debug(f"[CREATE_ISSUE] Received additional_fields type: {type(additional_fields)}, value: {additional_fields}")
     extra_fields = additional_fields or {}
+    if isinstance(extra_fields, str):
+        logger.debug(f"[CREATE_ISSUE] Parsing additional_fields as JSON string: {extra_fields}")
+        try:
+            extra_fields = json.loads(extra_fields)
+            logger.debug(f"[CREATE_ISSUE] Successfully parsed to dict: {extra_fields}")
+        except json.JSONDecodeError as e:
+            logger.error(f"[CREATE_ISSUE] Failed to parse additional_fields JSON: {e}")
+            raise ValueError(f"additional_fields must be a valid JSON string or dictionary: {e}")
     if not isinstance(extra_fields, dict):
-        raise ValueError("additional_fields must be a dictionary.")
+        logger.error(f"[CREATE_ISSUE] additional_fields is not a dict after parsing. Type: {type(extra_fields)}")
+        raise ValueError("additional_fields must be a dictionary or JSON string.")
+    logger.debug(f"[CREATE_ISSUE] Final extra_fields to be used: {extra_fields}")
 
     issue = jira.create_issue(
         project_key=project_key,
@@ -859,18 +870,18 @@ async def update_issue(
     ctx: Context,
     issue_key: Annotated[str, Field(description="Jira issue key (e.g., 'PROJ-123')")],
     fields: Annotated[
-        dict[str, Any],
+        dict[str, Any] | str,
         Field(
             description=(
-                "Dictionary of fields to update. For 'assignee', provide a string identifier (email, name, or accountId). "
-                "Example: `{'assignee': 'user@example.com', 'summary': 'New Summary'}`"
+                "Dictionary or JSON string of fields to update. For 'assignee', provide a string identifier (email, name, or accountId). "
+                "Example: `{'assignee': 'user@example.com', 'summary': 'New Summary'}` or '{\"assignee\": \"user@example.com\"}'"
             )
         ),
     ],
     additional_fields: Annotated[
-        dict[str, Any] | None,
+        dict[str, Any] | str | None,
         Field(
-            description="(Optional) Dictionary of additional fields to update. Use this for custom fields or more complex updates.",
+            description="(Optional) Dictionary or JSON string of additional fields to update. Use this for custom fields or more complex updates.",
             default=None,
         ),
     ] = None,
@@ -901,15 +912,36 @@ async def update_issue(
         ValueError: If in read-only mode or Jira client unavailable, or invalid input.
     """
     jira = await get_jira_fetcher(ctx)
-    # Use fields directly as dict
+    # Parse fields - handle both dict and JSON string
+    logger.debug(f"[UPDATE_ISSUE] Received fields type: {type(fields)}, value: {fields}")
+    if isinstance(fields, str):
+        logger.debug(f"[UPDATE_ISSUE] Parsing fields as JSON string: {fields}")
+        try:
+            fields = json.loads(fields)
+            logger.debug(f"[UPDATE_ISSUE] Successfully parsed fields to dict: {fields}")
+        except json.JSONDecodeError as e:
+            logger.error(f"[UPDATE_ISSUE] Failed to parse fields JSON: {e}")
+            raise ValueError(f"fields must be a valid JSON string or dictionary: {e}")
     if not isinstance(fields, dict):
-        raise ValueError("fields must be a dictionary.")
+        logger.error(f"[UPDATE_ISSUE] fields is not a dict after parsing. Type: {type(fields)}")
+        raise ValueError("fields must be a dictionary or JSON string.")
     update_fields = fields
 
-    # Use additional_fields directly as dict
+    # Parse additional_fields - handle both dict and JSON string
+    logger.debug(f"[UPDATE_ISSUE] Received additional_fields type: {type(additional_fields)}, value: {additional_fields}")
     extra_fields = additional_fields or {}
+    if isinstance(extra_fields, str):
+        logger.debug(f"[UPDATE_ISSUE] Parsing additional_fields as JSON string: {extra_fields}")
+        try:
+            extra_fields = json.loads(extra_fields)
+            logger.debug(f"[UPDATE_ISSUE] Successfully parsed additional_fields to dict: {extra_fields}")
+        except json.JSONDecodeError as e:
+            logger.error(f"[UPDATE_ISSUE] Failed to parse additional_fields JSON: {e}")
+            raise ValueError(f"additional_fields must be a valid JSON string or dictionary: {e}")
     if not isinstance(extra_fields, dict):
-        raise ValueError("additional_fields must be a dictionary.")
+        logger.error(f"[UPDATE_ISSUE] additional_fields is not a dict after parsing. Type: {type(extra_fields)}")
+        raise ValueError("additional_fields must be a dictionary or JSON string.")
+    logger.debug(f"[UPDATE_ISSUE] Final extra_fields to be used: {extra_fields}")
 
     # Parse attachments
     attachment_paths = []
@@ -1125,9 +1157,9 @@ async def create_issue_link(
         str | None, Field(description="(Optional) Comment to add to the link")
     ] = None,
     comment_visibility: Annotated[
-        dict[str, str] | None,
+        dict[str, str] | str | None,
         Field(
-            description="(Optional) Visibility settings for the comment (e.g., {'type': 'group', 'value': 'jira-users'})",
+            description="(Optional) Visibility settings for the comment as dictionary or JSON string (e.g., {'type': 'group', 'value': 'jira-users'})",
             default=None,
         ),
     ] = None,
@@ -1162,11 +1194,21 @@ async def create_issue_link(
 
     if comment:
         comment_obj = {"body": comment}
-        if comment_visibility and isinstance(comment_visibility, dict):
-            if "type" in comment_visibility and "value" in comment_visibility:
-                comment_obj["visibility"] = comment_visibility
-            else:
-                logger.warning("Invalid comment_visibility dictionary structure.")
+        if comment_visibility:
+            # Parse comment_visibility if it's a JSON string
+            visibility_dict = comment_visibility
+            if isinstance(visibility_dict, str):
+                try:
+                    visibility_dict = json.loads(visibility_dict)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Invalid comment_visibility JSON string: {e}")
+                    visibility_dict = None
+
+            if visibility_dict and isinstance(visibility_dict, dict):
+                if "type" in visibility_dict and "value" in visibility_dict:
+                    comment_obj["visibility"] = visibility_dict
+                else:
+                    logger.warning("Invalid comment_visibility dictionary structure. Must have 'type' and 'value' keys.")
         link_data["comment"] = comment_obj
 
     result = jira.create_issue_link(link_data)
@@ -1296,12 +1338,12 @@ async def transition_issue(
         ),
     ],
     fields: Annotated[
-        dict[str, Any] | None,
+        dict[str, Any] | str | None,
         Field(
             description=(
-                "(Optional) Dictionary of fields to update during the transition. "
+                "(Optional) Dictionary or JSON string of fields to update during the transition. "
                 "Some transitions require specific fields to be set (e.g., resolution). "
-                "Example: {'resolution': {'name': 'Fixed'}}"
+                "Example: {'resolution': {'name': 'Fixed'}} or '{\"resolution\": {\"name\": \"Fixed\"}}'"
             ),
             default=None,
         ),
@@ -1335,10 +1377,21 @@ async def transition_issue(
     if not issue_key or not transition_id:
         raise ValueError("issue_key and transition_id are required.")
 
-    # Use fields directly as dict
+    # Parse fields - handle both dict and JSON string
+    logger.debug(f"[TRANSITION_ISSUE] Received fields type: {type(fields)}, value: {fields}")
     update_fields = fields or {}
+    if isinstance(update_fields, str):
+        logger.debug(f"[TRANSITION_ISSUE] Parsing fields as JSON string: {update_fields}")
+        try:
+            update_fields = json.loads(update_fields)
+            logger.debug(f"[TRANSITION_ISSUE] Successfully parsed fields to dict: {update_fields}")
+        except json.JSONDecodeError as e:
+            logger.error(f"[TRANSITION_ISSUE] Failed to parse fields JSON: {e}")
+            raise ValueError(f"fields must be a valid JSON string or dictionary: {e}")
     if not isinstance(update_fields, dict):
-        raise ValueError("fields must be a dictionary.")
+        logger.error(f"[TRANSITION_ISSUE] fields is not a dict after parsing. Type: {type(update_fields)}")
+        raise ValueError("fields must be a dictionary or JSON string.")
+    logger.debug(f"[TRANSITION_ISSUE] Final update_fields to be used: {update_fields}")
 
     issue = jira.transition_issue(
         issue_key=issue_key,

@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+        "tony_tools": {
+            "type": "http",
+            "url": "http://192.168.66.3:5678/mcp/56c2b3a4-c373-47d4-9c45-911b02d7c4bb"
+        },
+        "atlassian_tools": {
+            "type": "http",
+            "url": "http://192.168.66.5:9000/mcp"
+        }
+    }
+}
