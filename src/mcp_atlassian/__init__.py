@@ -202,6 +202,22 @@ def main(
         f"Logging stream set to: {'stdout' if logging_stream is sys.stdout else 'stderr'}"
     )
 
+    # Add file handler after .env is loaded
+    log_file = os.getenv("LOG_FILE")
+    if log_file:
+        from pathlib import Path
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, mode="a")
+        file_handler.setLevel(current_logging_level)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        file_handler.setFormatter(formatter)
+        logging.getLogger().addHandler(file_handler)
+        logger.info(f"File logging enabled: {log_file}")
+
     def was_option_provided(ctx: click.Context, param_name: str) -> bool:
         return (
             ctx.get_parameter_source(param_name)
