@@ -1,6 +1,7 @@
 """Main FastMCP server setup for Atlassian integration."""
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, Literal, Optional
@@ -33,6 +34,44 @@ logger = logging.getLogger("mcp-atlassian.server.main")
 
 async def health_check(request: Request) -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+
+async def get_logs(request: Request) -> JSONResponse:
+    """Return recent logs from the log file."""
+    log_file = os.getenv("LOG_FILE")
+    if not log_file:
+        return JSONResponse(
+            {"error": "LOG_FILE not configured"}, status_code=404
+        )
+
+    try:
+        lines = int(request.query_params.get("lines", "100"))
+    except ValueError:
+        lines = 100
+
+    try:
+        from pathlib import Path
+        log_path = Path(log_file)
+        if not log_path.exists():
+            return JSONResponse(
+                {"error": f"Log file not found: {log_file}"}, status_code=404
+            )
+
+        with open(log_file, "r") as f:
+            all_lines = f.readlines()
+            recent_lines = all_lines[-lines:]
+
+        return JSONResponse({
+            "log_file": log_file,
+            "total_lines": len(all_lines),
+            "showing_lines": len(recent_lines),
+            "logs": "".join(recent_lines)
+        })
+    except Exception as e:
+        logger.error(f"Error reading log file: {e}")
+        return JSONResponse(
+            {"error": f"Failed to read log file: {str(e)}"}, status_code=500
+        )
 
 
 @asynccontextmanager
@@ -335,4 +374,10 @@ async def _health_check_route(request: Request) -> JSONResponse:
     return await health_check(request)
 
 
+@main_mcp.custom_route("/logs", methods=["GET"], include_in_schema=False)
+async def _logs_route(request: Request) -> JSONResponse:
+    return await get_logs(request)
+
+
 logger.info("Added /healthz endpoint for Kubernetes probes")
+logger.info("Added /logs endpoint for viewing application logs")

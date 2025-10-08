@@ -6,7 +6,9 @@ output stream based on their level.
 """
 
 import logging
+import os
 import sys
+from pathlib import Path
 from typing import TextIO
 
 
@@ -33,9 +35,23 @@ def setup_logging(
 
     # Add the level-dependent handler
     handler = logging.StreamHandler(stream)
-    formatter = logging.Formatter("%(levelname)s - %(name)s - %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
+
+    # Add file handler if LOG_FILE environment variable is set
+    log_file = os.getenv("LOG_FILE")
+    if log_file:
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_file, mode="a")
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+        root_logger.info(f"Logging to file: {log_file}")
 
     # Configure specific loggers
     loggers = ["mcp-atlassian", "mcp.server", "mcp.server.lowlevel.server", "mcp-jira"]
